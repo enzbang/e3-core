@@ -9,14 +9,21 @@ from typing import TYPE_CHECKING
 from e3.error import E3Error
 
 if TYPE_CHECKING:
-    from typing import (
-        Any,
-        Hashable,
-        Optional,
-    )
+    from typing import Any, Hashable, Optional, Protocol, Union
+    from abc import abstractmethod
     from collections.abc import Callable, Iterator, Sequence
 
-    VertexID = Hashable
+    class Comparable(Protocol):
+        """Protocol for annotating comparable types."""
+
+        @abstractmethod
+        def __lt__(self, other: Any) -> bool:
+            pass
+
+    class GenericVertexID(Hashable, Comparable):
+        ...
+
+    VertexID = Union[str, GenericVertexID]
 
 
 class DAGError(E3Error):
@@ -405,7 +412,7 @@ class DAG:
 
     def shortest_path(
         self, source: VertexID, target: VertexID
-    ) -> Optional[list[VertexID]]:
+    ) -> Optional[list[VertexID | None]]:
         """Compute the shortest path between two vertices of the DAG.
 
         :param source: vertex id of the source
@@ -577,12 +584,11 @@ class DAG:
 
         return result
 
-    def __iter__(self) -> Iterator[tuple[VertexID, Any]]:
-        return (
-            iter(DAGIterator(self))
-            if self.__cached_topological_order is None
-            else iter(self.__cached_topological_order)
-        )
+    def __iter__(self) -> Iterator[tuple[VertexID, Any]] | DAGIterator:
+        if self.__cached_topological_order is None:
+            return iter(DAGIterator(dag=self))
+        else:
+            return iter(self.__cached_topological_order)
 
     def __contains__(self, vertex_id: VertexID) -> bool:
         """Check if a vertex is present in the DAG."""
@@ -669,7 +675,7 @@ class DAG:
                 return result
             else:
                 # Recursive case, iterate over children.
-                for i, node in enumerate(sorted(successors)):  # type: ignore
+                for i, node in enumerate(sorted(successors)):
                     if i == len(successors) - 1:
                         # If it's the last child, no need to prefix by a pipe.
                         # Furthermore, the suffix pipe should not continue downwards (we
